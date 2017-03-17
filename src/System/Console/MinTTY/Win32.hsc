@@ -1,5 +1,5 @@
 {-
-This is a direct copy of System.Win32.MinTTY from the Win32 library. We need
+This is a (mostly) direct copy of System.Win32.MinTTY from the Win32 library. We need
 this for backwards compatibility with older versions of Win32 which do not ship
 with this module.
 -}
@@ -38,8 +38,9 @@ import System.Win32.Types
 #if MIN_VERSION_base(4,6,0)
 import Control.Exception (catch)
 #endif
+import Control.Monad (void)
 import Data.List (isPrefixOf, isInfixOf, isSuffixOf)
-import Foreign
+import Foreign hiding (void)
 import Foreign.C.Types
 import System.FilePath (takeFileName)
 
@@ -141,10 +142,23 @@ ntQueryObjectNameInformation h = do
       bufSize   = sizeOfONI + mAX_PATH * sizeOfTCHAR
   allocaBytes bufSize $ \buf ->
     alloca $ \p_len -> do
+      {-
+      See Note [Don't link against ntdll]
       _ <- failIfNeg "NtQueryObject" $ c_NtQueryObject
              h objectNameInformation buf (fromIntegral bufSize) p_len
+      -}
+      ntQueryObject h objectNameInformation buf (fromIntegral bufSize) p_len
       oni <- peek buf
       return $ usBuffer $ oniName oni
+
+-- See Note [Don't link against ntdll]
+ntQueryObject :: HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
+              -> ULONG -> Ptr ULONG -> IO ()
+ntQueryObject h cls buf bufSize p_len = do
+  lib <- getModuleHandle (Just "ntdll.dll")
+  ptr <- getProcAddress lib "NtQueryObject"
+  let c_NtQueryObject = mk_NtQueryObject (castPtrToFunPtr ptr)
+  void $ failIfNeg "NtQueryObject" $ c_NtQueryObject h cls buf bufSize p_len
 
 fileNameInfo :: CInt
 fileNameInfo = #const FileNameInfo
@@ -186,9 +200,21 @@ instance Storable FILE_NAME_INFO where
           , fniFileName       = vfniFileName
           }
 
+{-
+In an ideal world, we'd use this instead of the hack below.
+See Note [Don't link against ntdll]
+
 foreign import WINDOWS_CCONV "winternl.h NtQueryObject"
   c_NtQueryObject :: HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
                   -> ULONG -> Ptr ULONG -> IO NTSTATUS
+-}
+
+type F_NtQueryObject
+  =  HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
+  -> ULONG -> Ptr ULONG -> IO NTSTATUS
+
+foreign import WINDOWS_CCONV "dynamic"
+  mk_NtQueryObject :: FunPtr F_NtQueryObject -> F_NtQueryObject
 
 type NTSTATUS = #type NTSTATUS
 type ULONG    = #type ULONG
@@ -238,3 +264,16 @@ instance Storable UNICODE_STRING where
 
 sizeOfTCHAR :: Int
 sizeOfTCHAR = sizeOf (undefined :: TCHAR)
+
+{-
+Note [Don't link against ntdll]
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+We deliberately avoid using any direct foreign imports from ntdll, and instead
+dynamically load any functions we need from ntdll by hand. Why? As it turns
+out, if you're using some versions of the 32-bit mingw-w64-crt library (which
+is shipped with GHC on Windows), statically linking against both ntdll and
+msvcrt can lead to nasty linker redefinition errors. See GHC Trac #13431.
+(Curiously, this bug is only present on 32-bit Windows, which is why it went
+unnoticed for a while.)
+-}
