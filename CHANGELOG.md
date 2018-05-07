@@ -1,4 +1,6 @@
 ### next [????.??.??]
+* Only use the `Win32`-provided version of `isMinTTY` if building against
+  `Win32-2.5.3` to be certain that one avoids Trac #13431.
 * Don't enable `Safe` on GHC 7.2.
 
 ### 0.1.1 [2017.03.17]

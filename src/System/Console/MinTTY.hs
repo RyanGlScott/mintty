@@ -21,7 +21,7 @@ module System.Console.MinTTY (isMinTTY, isMinTTYHandle, HANDLE) where
 #if defined(WINDOWS)
 import           System.Win32.Types (HANDLE)
 
-# if MIN_VERSION_Win32(2,5,0)
+# if MIN_VERSION_Win32(2,5,3)
 import qualified System.Win32.MinTTY as Win32 (isMinTTY, isMinTTYHandle)
 # else
 -- NB: This is the backported definition local to this package, which we only
