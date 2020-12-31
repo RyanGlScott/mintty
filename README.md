@@ -3,7 +3,7 @@
 [![Hackage Dependencies](https://img.shields.io/hackage-deps/v/mintty.svg)](http://packdeps.haskellers.com/reverse/mintty)
 [![Haskell Programming Language](https://img.shields.io/badge/language-Haskell-blue.svg)][Haskell.org]
 [![BSD3 License](http://img.shields.io/badge/license-BSD3-brightgreen.svg)][tl;dr Legal: BSD3]
-[![Build](https://img.shields.io/travis/RyanGlScott/mintty.svg)](https://travis-ci.org/RyanGlScott/mintty)
+[![Linux build](https://github.com/RyanGlScott/mintty/workflows/Haskell-CI/badge.svg)](https://github.com/RyanGlScott/mintty/actions?query=workflow%3AHaskell-CI)
 [![Windows build](https://ci.appveyor.com/api/projects/status/kj3knsx19ebh9wly?svg=true)](https://ci.appveyor.com/project/RyanGlScott/mintty)
 
 [Hackage: mintty]:
