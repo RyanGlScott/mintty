@@ -1,7 +1,8 @@
 {-
 This is a (mostly) direct copy of System.Win32.MinTTY from the Win32 library. We need
-this for backwards compatibility with older versions of Win32 which do not ship
-with this module.
+this both for backwards compatibility with older versions of Win32, which do not ship
+with this module, as well as to backport fixes for bugs in old versions of Win32 that
+do ship with this module.
 -}
 
 {-# LANGUAGE CPP #-}
@@ -38,11 +39,9 @@ import System.Win32.Types
 #if MIN_VERSION_base(4,6,0)
 import Control.Exception (catch)
 #endif
-import Control.Monad (void)
-import Data.List (isPrefixOf, isInfixOf, isSuffixOf)
-import Foreign hiding (void)
+import Data.List (isInfixOf)
+import Foreign
 import Foreign.C.Types
-import System.FilePath (takeFileName)
 
 #if __GLASGOW_HASKELL__ < 711
 #let alignment t = "%lu", (unsigned long)offsetof(struct {char x__; t (y__); }, y__)
@@ -99,11 +98,8 @@ isMinTTYCompat h = do
     return False
 
 cygwinMSYSCheck :: String -> Bool
-cygwinMSYSCheck fn = ("cygwin-" `isPrefixOf` fn' || "msys-" `isPrefixOf` fn') &&
-            "-pty" `isInfixOf` fn' &&
-            "-master" `isSuffixOf` fn'
-  where
-    fn' = takeFileName fn
+cygwinMSYSCheck fn = ("cygwin-" `isInfixOf` fn || "msys-" `isInfixOf` fn) &&
+            "-pty" `isInfixOf` fn
 -- Note that GetFileInformationByHandleEx might return a filepath like:
 --
 --    \msys-dd50a72ab4668b33-pty1-to-master
@@ -113,8 +109,16 @@ cygwinMSYSCheck fn = ("cygwin-" `isPrefixOf` fn' || "msys-" `isPrefixOf` fn') &&
 --    \Device\NamedPipe\msys-dd50a72ab4668b33-pty1-to-master
 --
 -- This means we can't rely on "\cygwin-" or "\msys-" being at the very start
--- of the filepath. Therefore, we must take care to first call takeFileName
--- before checking for "cygwin" or "msys" at the start using `isPrefixOf`.
+-- of the filepath. As a result, we use `isPrefixOf` to check for "cygwin" and
+-- "msys".
+--
+-- It's unclear if "-master" will always appear in the filepath name. Recent
+-- versions of MinTTY have been known to give filepaths like this (#186):
+--
+--    \msys-dd50a72ab4668b33-pty0-to-master-nat
+--
+-- Just in case MinTTY ever changes this convention, we don't bother checking
+-- for the presence of "-master" in the filepath name at all.
 
 getFileNameByHandle :: HANDLE -> IO String
 getFileNameByHandle h = do
@@ -142,23 +146,13 @@ ntQueryObjectNameInformation h = do
       bufSize   = sizeOfONI + mAX_PATH * sizeOfTCHAR
   allocaBytes bufSize $ \buf ->
     alloca $ \p_len -> do
-      {-
-      See Note [Don't link against ntdll]
+      hwnd <- getModuleHandle (Just "ntdll.exe")
+      addr <- getProcAddress hwnd "NtQueryObject"
+      let c_NtQueryObject = mk_NtQueryObject (castPtrToFunPtr addr)
       _ <- failIfNeg "NtQueryObject" $ c_NtQueryObject
              h objectNameInformation buf (fromIntegral bufSize) p_len
-      -}
-      ntQueryObject h objectNameInformation buf (fromIntegral bufSize) p_len
       oni <- peek buf
       return $ usBuffer $ oniName oni
-
--- See Note [Don't link against ntdll]
-ntQueryObject :: HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
-              -> ULONG -> Ptr ULONG -> IO ()
-ntQueryObject h cls buf bufSize p_len = do
-  lib <- getModuleHandle (Just "ntdll.dll")
-  ptr <- getProcAddress lib "NtQueryObject"
-  let c_NtQueryObject = mk_NtQueryObject (castPtrToFunPtr ptr)
-  void $ failIfNeg "NtQueryObject" $ c_NtQueryObject h cls buf bufSize p_len
 
 fileNameInfo :: CInt
 fileNameInfo = #const FileNameInfo
@@ -168,6 +162,12 @@ mAX_PATH = #const MAX_PATH
 
 objectNameInformation :: CInt
 objectNameInformation = #const ObjectNameInformation
+
+type F_NtQueryObject = HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
+                     -> ULONG -> Ptr ULONG -> IO NTSTATUS
+
+foreign import WINDOWS_CCONV "dynamic"
+  mk_NtQueryObject :: FunPtr F_NtQueryObject -> F_NtQueryObject
 
 type F_GetFileInformationByHandleEx =
   HANDLE -> CInt -> Ptr FILE_NAME_INFO -> DWORD -> IO BOOL
@@ -200,27 +200,7 @@ instance Storable FILE_NAME_INFO where
           , fniFileName       = vfniFileName
           }
 
-{-
-In an ideal world, we'd use this instead of the hack below.
-See Note [Don't link against ntdll]
-
-foreign import WINDOWS_CCONV "winternl.h NtQueryObject"
-  c_NtQueryObject :: HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
-                  -> ULONG -> Ptr ULONG -> IO NTSTATUS
--}
-
-type F_NtQueryObject
-  =  HANDLE -> CInt -> Ptr OBJECT_NAME_INFORMATION
-  -> ULONG -> Ptr ULONG -> IO NTSTATUS
-
-foreign import WINDOWS_CCONV "dynamic"
-  mk_NtQueryObject :: FunPtr F_NtQueryObject -> F_NtQueryObject
-
 type NTSTATUS = #type NTSTATUS
-type ULONG    = #type ULONG
-
-failIfNeg :: (Num a, Ord a) => String -> IO a -> IO a
-failIfNeg = failIf (< 0)
 
 newtype OBJECT_NAME_INFORMATION = OBJECT_NAME_INFORMATION
   { oniName :: UNICODE_STRING
@@ -265,15 +245,10 @@ instance Storable UNICODE_STRING where
 sizeOfTCHAR :: Int
 sizeOfTCHAR = sizeOf (undefined :: TCHAR)
 
-{-
-Note [Don't link against ntdll]
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+-- Compatibility with old versions of Win32
+#if !(MIN_VERSION_Win32(2,5,0))
+type ULONG    = #type ULONG
 
-We deliberately avoid using any direct foreign imports from ntdll, and instead
-dynamically load any functions we need from ntdll by hand. Why? As it turns
-out, if you're using some versions of the 32-bit mingw-w64-crt library (which
-is shipped with GHC on Windows), statically linking against both ntdll and
-msvcrt can lead to nasty linker redefinition errors. See GHC Trac #13431.
-(Curiously, this bug is only present on 32-bit Windows, which is why it went
-unnoticed for a while.)
--}
+failIfNeg :: (Num a, Ord a) => String -> IO a -> IO a
+failIfNeg = failIf (< 0)
+#endif
