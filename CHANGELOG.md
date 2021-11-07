@@ -1,3 +1,7 @@
+### next [????.??.??]
+* Backport a fix for a `Win32` bug that would make `isMinTTY` incorrectly
+  return `False` on recent versions of MinTTY.
+
 ### 0.1.2 [2018.05.07]
 * Only use the `Win32`-provided version of `isMinTTY` if building against
   `Win32-2.5.3` to be certain that one avoids Trac #13431.
