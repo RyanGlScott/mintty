@@ -67,8 +67,7 @@ library
     if flag(Win32-2-13-1)
       build-depends:   Win32 >= 2.13.1
     else
-      build-depends:   filepath
-                     , Win32 < 2.13.1
+      build-depends:   Win32 < 2.13.1
       build-tools:     hsc2hs
       include-dirs:    include
       includes:        windows_cconv.h, winternl_compat.h
