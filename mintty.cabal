@@ -1,5 +1,5 @@
 name:                mintty
-version:             0.1.3
+version:             0.1.4
 synopsis:            A reliable way to detect the presence of a MinTTY console on Windows
 description:         MinTTY is a Windows-specific terminal emulator for the
                      widely used Cygwin and MSYS projects, which provide

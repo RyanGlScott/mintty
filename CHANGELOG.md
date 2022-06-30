@@ -1,4 +1,4 @@
-### next [????.??.??]
+### 0.1.4 [2022.06.30]
 * Remove an unused dependency on `filepath`.
 
 ### 0.1.3 [2021.11.07]
