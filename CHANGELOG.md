@@ -1,3 +1,6 @@
+### next [????.??.??]
+* Remove an unused dependency on `filepath`.
+
 ### 0.1.3 [2021.11.07]
 * Backport a fix for a `Win32` bug that would make `isMinTTY` incorrectly
   return `False` on recent versions of MinTTY.
