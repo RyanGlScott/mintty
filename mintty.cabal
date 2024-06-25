@@ -70,7 +70,6 @@ library
       build-depends:   Win32 < 2.13.1
       build-tools:     hsc2hs
       include-dirs:    include
-      includes:        windows_cconv.h, winternl_compat.h
       other-modules:   System.Console.MinTTY.Win32
 
   hs-source-dirs:      src
