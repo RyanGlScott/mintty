@@ -1,6 +1,5 @@
 # `mintty`
 [![Hackage](https://img.shields.io/hackage/v/mintty.svg)][Hackage: mintty]
-[![Hackage Dependencies](https://img.shields.io/hackage-deps/v/mintty.svg)](http://packdeps.haskellers.com/reverse/mintty)
 [![Haskell Programming Language](https://img.shields.io/badge/language-Haskell-blue.svg)][Haskell.org]
 [![BSD3 License](http://img.shields.io/badge/license-BSD3-brightgreen.svg)][tl;dr Legal: BSD3]
 [![Linux build](https://github.com/RyanGlScott/mintty/workflows/Haskell-CI/badge.svg)](https://github.com/RyanGlScott/mintty/actions?query=workflow%3AHaskell-CI)
